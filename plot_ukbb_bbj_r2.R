@@ -8,8 +8,6 @@ library(dplyr)
 ####################################################
 ### Read in data to make plots
 
-library(ggplot2)
-
 read_r2 <- function(filename, target, sumstats) {
   # nomenclature is [target cohort]_[sumstats cohort]
   target_sumstats <- read.table(filename, header=T)
@@ -31,15 +29,18 @@ bbj_bbj <- read_r2('bbj_from_bbj.r2.txt', 'BBJ', 'BBJ')
 bbj_ukbb <- read_r2('bbj_from_ukbb.r2.txt', 'BBJ', 'UKBB')
 ukbb_ukbb <- read_r2('ukbb_from_ukbb.r2.txt', 'UKBB', 'UKBB')
 ukbb_bbj <- read_r2('ukbb_from_bbj.r2.txt', 'UKBB', 'BBJ')
+afr_ukbb <- read_r2('afr_from_ukbb.r2.txt', 'UKBB AFR', 'UKBB')
+afr_bbj <- read_r2('afr_from_bbj.r2.txt', 'UKBB AFR', 'BBJ')
 
 ####################################################
 ### Make supplementary plots for all p-value thresholds
 
 bbj <- rbind(bbj_bbj, bbj_ukbb)
 ukbb <- rbind(ukbb_ukbb, ukbb_bbj)
+afr <- rbind(afr_ukbb, afr_bbj)
 
 color_vec <- brewer.pal(3, 'Set1')
-names(color_vec) <- c('UKBB', 'BBJ', '')
+names(color_vec) <- c('UKBB', 'BBJ', 'UKBB AFR')
 
 plot_all_r2 <- function(dataset, data_name) {
   pd <- position_dodge(0.2) # move them .05 to the left and right
@@ -54,22 +55,27 @@ plot_all_r2 <- function(dataset, data_name) {
            #expression(R^2~'(in ', data_name, ')')) +
     theme_classic() +
     theme(strip.background = element_rect(fill = "lightgrey"),
-          axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+          axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1, size=8),
           axis.text = element_text(color='black'),
           text = element_text(size=14))
 }
 
 
 p_bbj <- plot_all_r2(bbj, 'BBJ')
-p_ukbb <- plot_all_r2(ukbb, 'UKBB')
+p_ukbb <- plot_all_r2(ukbb, 'UKBB European descent')
+p_afr <- plot_all_r2(afr, 'UKBB African descent')
 
-p_bbj_ukbb <- plot_grid(p_bbj, p_ukbb, labels=c('A', 'B'), ncol=1)
-save_plot('bbj_ukbb_r2_all_p.pdf', p_bbj_ukbb, nrow=2, base_height=6, base_width=10)
+save_plot('bbj_r2_all_p.pdf', p_bbj, base_width=8, base_height=5)
+save_plot('ukbb_r2_all_p.pdf', p_ukbb, base_width=8, base_height=5)
+save_plot('afr_r2_all_p.pdf', p_afr, base_width=8, base_height=5)
+
+p_bbj_ukbb <- plot_grid(p_bbj, p_ukbb, p_afr, labels=c('A', 'B', 'C'), ncol=2)
+save_plot('bbj_ukbb_r2_all_p.pdf', p_bbj_ukbb, nrow=2, base_height=4, base_width=15)
 
 ####################################################
 ### Make main figures
 
-all_cohorts <- rbind(bbj_bbj, bbj_ukbb, ukbb_ukbb, ukbb_bbj)
+all_cohorts <- rbind(bbj_bbj, bbj_ukbb, ukbb_ukbb, ukbb_bbj, afr_ukbb, afr_bbj)
 write.table(all_cohorts, 'all_cohorts.txt', quote=F, row.names=F, sep='\t')
 
 all_filt <- all_cohorts %>%
@@ -79,10 +85,41 @@ all_filt <- all_cohorts %>%
 
 bbj_filt <- subset(all_filt, target=='BBJ') %>% arrange(r2)
 ukbb_filt <- subset(all_filt, target=='UKBB') %>% arrange(r2)
+afr_filt <- subset(all_filt, target=='UKBB AFR') %>% arrange(r2)
 bbj_bbj_filt <- subset(bbj_filt, sumstats=='BBJ')
 ukbb_ukbb_filt <- subset(ukbb_filt, sumstats=='UKBB')
+afr_ukbb_filt <- subset(afr_filt, sumstats=='UKBB')
 bbj_filt$pheno <- factor(bbj_filt$pheno, levels=as.character(bbj_bbj_filt$pheno))
 ukbb_filt$pheno <- factor(ukbb_filt$pheno, levels=as.character(ukbb_ukbb_filt$pheno))
+afr_filt$pheno <- factor(afr_filt$pheno, levels=as.character(afr_ukbb_filt$pheno))
+
+all_filt$pheno <- factor(all_filt$pheno, levels=as.character(ukbb_ukbb_filt$pheno))
+ukbb_sumstats <- subset(all_filt, sumstats=='UKBB')
+all_filt$pheno <- factor(all_filt$pheno, levels=as.character(bbj_bbj_filt$pheno))
+bbj_sumstats <- subset(all_filt, sumstats=='BBJ')
+
+pd <- position_dodge(0.2) # move them .05 to the left and right
+p1 <- ggplot(ukbb_sumstats, aes(x=pheno, y=r2, color=target)) +
+  geom_point(position=pd) +
+  #facet_grid(~sumstats) +
+  geom_errorbar(aes(ymin=CI95_low, ymax=CI95_high), width=.1, position=pd) +
+  scale_color_manual(values=color_vec, name='Target cohort') +
+  labs(x='Phenotype', y=bquote(R^2), title='UKBB sumstats') +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1),
+        text = element_text(size=16, color='black'))
+
+p2 <- ggplot(bbj_sumstats, aes(x=pheno, y=r2, color=target)) +
+  geom_point(position=pd) +
+  #facet_grid(~sumstats) +
+  geom_errorbar(aes(ymin=CI95_low, ymax=CI95_high), width=.1, position=pd) +
+  scale_color_manual(values=color_vec, name='Target cohort') +
+  labs(x='Phenotype', y=bquote(R^2), title='BBJ sumstats') +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1),
+        text = element_text(size=16, color='black'))
+
+p_bbj_ukbb_test <- plot_grid(p1, p2, labels=c('A', 'B'))#, hjust=c(-0.5,-0.5,-0.5,1))
+
+ggsave('bbj_ukbb_r2_test.pdf', p_bbj_ukbb_test, width=12, height=6)
 
 plot_top_r2 <- function(dataset, data_name, legend=FALSE) {
   pd <- position_dodge(0.2) # move them .05 to the left and right
@@ -99,9 +136,13 @@ plot_top_r2 <- function(dataset, data_name, legend=FALSE) {
   return(p)
 }
 
+p1 <- plot_top_r2(bbj_filt, 'BBJ', T)
 p_bbj_top <- plot_top_r2(bbj_filt, 'BBJ')
-p_ukbb_top <- plot_top_r2(ukbb_filt, 'UKBB', T)
+p_ukbb_top <- plot_top_r2(ukbb_filt, 'UKBB')
+p_afr_top <- plot_top_r2(afr_filt, 'UKBB African descent')
 
-p_bbj_ukbb_top <- plot_grid(p_bbj_top, p_ukbb_top, labels=c('A', 'B'), rel_widths = c(1, 1.2))
-save_plot('bbj_ukbb_r2_top.pdf', p_bbj_ukbb_top, base_height=6, base_width=12)
+legend <- get_legend(p1)
+
+p_bbj_ukbb_top <- plot_grid(p_bbj_top, p_ukbb_top, p_afr_top, legend, labels=c('A', 'B', 'C', ''))#, hjust=c(-0.5,-0.5,-0.5,1))
+save_plot('bbj_ukbb_r2_top.pdf', p_bbj_ukbb_top, base_height=10, base_width=10)
 

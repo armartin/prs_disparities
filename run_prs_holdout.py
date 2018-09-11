@@ -108,15 +108,10 @@ def main(args):
     ################################################################################
     ### Get true phenotypes from UKBB
     if args.pheno_table:
-        phenotypes = hl.import_table('gs://phenotype_31063/ukb31063.phesant_phenotypes.both_sexes.tsv.bgz',
-                                       key='userId', quote='"', impute=True, types={'userId': hl.tstr}, missing='')
-
-        gwas_phenos = {'50': 'height', '21001': 'bmi', '4080': 'sbp', '4079': 'dbp', '30000': 'wbc', '30130': 'monocyte',
-                       '30140': 'neutrophil', '30150': 'eosinophil', '30160': 'basophil', '30120': 'lymphocyte', '30010': 'rbc',
-                       '30050': 'mch', '30040': 'mcv', '30060': 'mchc', '30020': 'hb', '30030': 'ht', '30080': 'plt'}
-
-        phenotypes = phenotypes.select(*gwas_phenos.keys())
-        phenotypes = phenotypes.rename(gwas_phenos)
+        # phenotypes = hl.import_table('gs://phenotype_31063/ukb31063.phesant_phenotypes.both_sexes.tsv.bgz',
+        #                                key='userId', quote='"', impute=True, types={'userId': hl.tstr}, missing='')
+        phenotypes = hl.import_table('gs://armartin/disparities/ukbb/UKB_phenos_ALL17.txt.bgz',
+                                     key='eid', impute=True, types={'eid': hl.tstr})
 
         covariates = hl.import_table('gs://phenotype_31063/ukb31063.gwas_covariates.both_sexes.tsv',
                                      key='s', impute=True, types={'s': hl.tstr})
@@ -126,7 +121,7 @@ def main(args):
         # Write pheno/covar/sample info table
         for pheno in phenos:
             #sampleids = hl.import_table('gs://ukb31063-mega-gwas/hail-0.1/qc/ukb31063.gwas_samples.txt', delimiter='\s+').key_by('s')
-            gwas_holdout = hl.import_table('gs://armartin/disparities/pheno_31063_holdout_gwas_' + pheno + '.info.txt.gz', delimiter='\s+').key_by('s')
+            gwas_holdout = hl.import_table(args.dirname + args.basename + pheno + '.info.txt.gz', delimiter='\s+').key_by('s')
 
             samples = samples.annotate(**{pheno + '_holdout': gwas_holdout[samples.s].gwas_holdout == 'holdout'})
 
@@ -141,10 +136,11 @@ def main(args):
             ss = hl.import_table(args.dirname + args.basename + pheno + '.*.bgz',
                                       delimiter='\s+',
                                       impute=True,
-                                 types={'beta': hl.tfloat, 'pval': hl.tfloat})
+                                 types={'beta': hl.tfloat, 'pval': hl.tfloat, 'pos': hl.tint,
+                                        'nCompleteSamples': hl.tint, 'AC': hl.tfloat, 'ytx': hl.tfloat, 'se': hl.tfloat,
+                                        'tstat': hl.tfloat})
             ss = ss.key_by(locus = hl.locus(hl.str(ss.chr), hl.int(ss.pos))).repartition(200)
 
-            #ss.write('gs://armartin/disparities/pheno_31063_holdout_gwas_' + pheno + '.ht', True)
             ss.write(args.dirname + args.basename + pheno + '.ht', True)
 
     ################################################################################
@@ -161,16 +157,13 @@ def main(args):
         samples = hl.read_table('gs://armartin/disparities/pheno_31063_holdout_gwas_phenos.ht')
         mt_all = mt_all.annotate_cols(**samples[mt_all.s]) # ok that phenos keyed on userId not s?
 
-        #mt_all.repartition(5000, shuffle=False).write('gs://armartin/disparities/pheno_31063_holdout_gwas_ALL17.mt')
         mt_all.repartition(5000, shuffle=False).write(args.dirname + args.basename + 'ALL17.mt')
 
-    #mt_all = hl.read_matrix_table('gs://armartin/disparities/pheno_31063_holdout_gwas_ALL17.mt')
     mt_all = hl.read_matrix_table(args.dirname + args.basename + 'ALL17.mt')
 
 
     for pheno in phenos: #[6:len(phenos)]:
         print(pheno)
-        #ss = hl.read_table('gs://armartin/disparities/pheno_31063_holdout_gwas_' + pheno + '.ht')
         ss = hl.read_table(args.dirname + args.basename + pheno + '.ht')
 
         """
@@ -188,14 +181,10 @@ def main(args):
 
         p_max = {'s1': 5e-8, 's2': 1e-6, 's3': 1e-4, 's4': 1e-3, 's5': 1e-2, 's6': .05, 's7': .1, 's8': .2, 's9': .5, 's10': 1}
 
-        #pheno_clump = specific_clumps('gs://armartin/disparities/pheno_31063_holdout_gwas_' + pheno + '.clumped')
         pheno_clump = specific_clumps(args.dirname + args.basename + pheno + '.clumped')
 
-        #mt = mt.annotate_rows(clump_snps=hl.int(hl.is_defined(pheno_clump[mt.locus])))
         mt = mt.filter_rows(pheno_clump.get(mt.locus, False))
         print(mt.count())
-
-        # filter rows to things that have p-values here
 
         annot_expr = {
             k: hl.agg.sum(mt.beta * mt.dosage * hl.int(mt.ss.pval < v))
@@ -203,7 +192,6 @@ def main(args):
 
         mt = mt.annotate_cols(**annot_expr)
 
-        #mt.cols().write('gs://armartin/disparities/UKB_' + pheno + '_PRS.ht', stage_locally=True, overwrite=True)
         mt.cols().write(args.dirname + 'UKB_' + pheno + '_PRS.ht', stage_locally=True, overwrite=True)
         ht = hl.read_table(args.dirname + 'UKB_' + pheno + '_PRS.ht')
         ht_out = ht.drop(*[x for x in list(ht.row) if 'holdout' in x], *[x for x in phenos if pheno not in x])
