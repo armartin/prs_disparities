@@ -38,11 +38,8 @@ def annotate_beta(mt, ss_loc):
 
 def specific_clumps(filename):
     clump = hl.import_table(filename, delimiter='\s+', min_partitions=10, types={'P': hl.tfloat})
-    clump_dict = clump.aggregate(hl.dict(hl.agg.collect(
-        (hl.locus(hl.str(clump.CHR), hl.int(clump.BP)),
-        True)
-    )))
-    return hl.literal(clump_dict)
+    clump = clump.key_by(locus = hl.locus(hl.str(clump.CHR), hl.int(clump.BP)))
+    return clump
 
 
 def main(args):
@@ -183,7 +180,7 @@ def main(args):
 
         pheno_clump = specific_clumps(args.dirname + args.basename + pheno + '.clumped')
 
-        mt = mt.filter_rows(pheno_clump.get(mt.locus, False))
+        mt = mt.filter_rows(hl.is_defined(pheno_clump[mt.locus]))
         print(mt.count())
 
         annot_expr = {
