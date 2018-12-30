@@ -37,7 +37,7 @@ def annotate_beta(mt, ss_loc):
 
 
 def specific_clumps(filename):
-    clump = hl.import_table(filename, delimiter='\s+', min_partitions=10, types={'P': hl.tfloat})
+    clump = hl.import_table(filename, delimiter='\s+', min_partitions=10, types={'P': hl.tfloat}, skip_blank_lines=True)
     clump = clump.key_by(locus = hl.locus(hl.str(clump.CHR), hl.int(clump.BP)))
     return clump
 
@@ -45,10 +45,10 @@ def specific_clumps(filename):
 def main(args):
     ########################################################################
     ### initialize
-    phenos = ['height', 'bmi', 'sbp', 'dbp', 'wbc', 'monocyte', 'neutrophil', 'eosinophil', 'basophil', 'lymphocyte',
-              'rbc', 'mch', 'mcv', 'mchc', 'hb', 'ht', 'plt']
-    phenotype = 'ALL17'
-    sumstats_text_file = args.dirname + args.basename + 'ALL17.clumped'
+    phenos = ['crc', 't2d', 'glaucoma', 'afib', 'ra']
+    renamed = {'s': 's', 'CRC': 'crc', 'T2D': 't2d', 'Glaucoma': 'glaucoma', 'AFib': 'afib', 'RA': 'ra'}
+    phenotype = 'ALL5cc'
+    sumstats_text_file = args.dirname + args.basename + 'ALL5cc.clumped'
     prs_loci_table_location = args.dirname + 'keytables/ukb-'+phenotype+'-pt-sumstats-locus-allele-keyed.kt'
     contig_row_dict_location = args.dirname + 'contig_row_dict-'+phenotype
 
@@ -58,7 +58,8 @@ def main(args):
 
     start = time.time()
     # large block size because we read very little data (due to filtering & ignoring genotypes)
-    hl.init(branching_factor=10, min_block_size=2000)
+    # hl.init(branching_factor=10, min_block_size=2000)
+    hl.init()
 
 
     ################################################################################
@@ -74,41 +75,11 @@ def main(args):
     ss = hl.read_table(prs_loci_table_location)
 
     ################################################################################
-    ### determine the indices of the prs variants in bgen
-    if (args.generate_contig_row_dict):
-        mt = hl.methods.import_bgen(bgen_files,
-                                    [],
-                                    contig_recoding=contigs,
-                                    _row_fields=['file_row_idx'])
-        prs_rows = mt.filter_rows(hl.is_defined(ss[mt.locus])).rows()
-        print('about to collect')
-        # remove all unnecessary data, dropping keys and other irrelevant fields
-        prs_rows = prs_rows.key_by()
-        prs_rows = prs_rows.select(contig=prs_rows.locus.contig,
-                                   file_row_idx=prs_rows.file_row_idx)
-        contig_row_list = prs_rows.collect()
-        print('finished collecting')
-        contig_reformed = [(x['contig'], x['file_row_idx']) for x in contig_row_list]
-        print('reformed')
-        from collections import defaultdict
-        contig_row_dict = defaultdict(list)
-        for k, v in contig_reformed:
-            contig_row_dict[k].append(v)
-        print('dictionary created')
-
-        with hl.hadoop_open(contig_row_dict_location, 'wb') as f:
-            pickle.dump(contig_row_dict, f)
-    else:
-        with hl.hadoop_open(contig_row_dict_location, 'rb') as f:
-            contig_row_dict = pickle.load(f)
-
-    ################################################################################
     ### Get true phenotypes from UKBB
     if args.pheno_table:
-        # phenotypes = hl.import_table('gs://phenotype_31063/ukb31063.phesant_phenotypes.both_sexes.tsv.bgz',
-        #                                key='userId', quote='"', impute=True, types={'userId': hl.tstr}, missing='')
-        phenotypes = hl.import_table('gs://armartin/disparities/ukbb/UKB_phenos_ALL17.txt.bgz',
-                                     key='eid', impute=True, types={'eid': hl.tstr})
+        phenotypes = hl.import_table('gs://mkanai/disparities/ukb31063.phecode_5diseases.both_sexes.tsv.bgz',
+                                     key='s', impute=True, types={'s': hl.tstr})
+        phenotypes = phenotypes.rename(renamed)
 
         covariates = hl.import_table('gs://phenotype_31063/ukb31063.gwas_covariates.both_sexes.tsv',
                                      key='s', impute=True, types={'s': hl.tstr})
@@ -117,22 +88,19 @@ def main(args):
 
         # Write pheno/covar/sample info table
         for pheno in phenos:
-            #sampleids = hl.import_table('gs://ukb31063-mega-gwas/hail-0.1/qc/ukb31063.gwas_samples.txt', delimiter='\s+').key_by('s')
-            gwas_holdout = hl.import_table(args.dirname + args.basename + pheno + '.info.txt.gz', delimiter='\s+').key_by('s')
+            gwas_holdout = hl.import_table('gs://mkanai/disparities/ukbb/pheno_31063_holdout_gwas_' + pheno + '.info.txt.gz', delimiter='\s+').key_by('s')
 
             samples = samples.annotate(**{pheno + '_holdout': gwas_holdout[samples.s].gwas_holdout == 'holdout'})
 
-        samples.write('gs://armartin/disparities/pheno_31063_holdout_gwas_phenos.ht')
+        samples.write('gs://mkanai/disparities/pheno_31063_holdout_gwas_cc_phenos.ht', args.overwrite)
 
     if args.ss_tables:
         # Write ss info
         for pheno in phenos:
             print(pheno)
-            # change sumstats to bgz
-            #ss = hl.import_table('gs://armartin/disparities/pheno_31063_holdout_gwas_' + pheno + '.txt.gz',
             ss = hl.import_table(args.dirname + args.basename + pheno + '.*.bgz',
-                                      delimiter='\s+',
-                                      impute=True,
+                                 delimiter='\s+',
+                                 impute=True,
                                  types={'beta': hl.tfloat, 'pval': hl.tfloat, 'pos': hl.tint,
                                         'nCompleteSamples': hl.tint, 'AC': hl.tfloat, 'ytx': hl.tfloat, 'se': hl.tfloat,
                                         'tstat': hl.tfloat})
@@ -143,20 +111,18 @@ def main(args):
     ################################################################################
     ### Run the PRS using phenotype-specific clump variants
     if args.write_bgen:
-        contig_row_dict2 = {'gs://fc-7d5088b4-7673-45b5-95c2-17ae00a04183/imputed/ukb_imp_chr{contig}_v3.bgen'.format(contig=k): v for k, v in contig_row_dict.items()}
-        mt_all = hl.methods.import_bgen(bgen_files,
-                                    ['dosage'],
-                                    sample_file='gs://phenotype_31063/ukb31063.autosomes.sample',
-                                    contig_recoding=contigs,
-                                    _variants_per_file=contig_row_dict2,
-                                    _row_fields=[])
+        mt_all = hl.import_bgen(
+            bgen_files,
+            entry_fields=['dosage'],
+            sample_file='gs://phenotype_31063/ukb31063.autosomes.sample',
+            variants=ss.locus)
 
-        samples = hl.read_table('gs://armartin/disparities/pheno_31063_holdout_gwas_phenos.ht')
+        samples = hl.read_table('gs://mkanai/disparities/pheno_31063_holdout_gwas_cc_phenos.ht')
         mt_all = mt_all.annotate_cols(**samples[mt_all.s]) # ok that phenos keyed on userId not s?
 
-        mt_all.repartition(5000, shuffle=False).write(args.dirname + args.basename + 'ALL17.mt')
+        mt_all.repartition(5000, shuffle=False).write(args.dirname + args.basename + 'ALL5cc.mt', args.overwrite)
 
-    mt_all = hl.read_matrix_table(args.dirname + args.basename + 'ALL17.mt')
+    mt_all = hl.read_matrix_table(args.dirname + args.basename + 'ALL5cc.mt')
 
 
     for pheno in phenos: #[6:len(phenos)]:
@@ -176,7 +142,8 @@ def main(args):
         mt = mt.annotate_rows(ss=ss[mt.locus])
         mt = annotate_beta(mt, mt.ss)
 
-        p_max = {'s1': 5e-8, 's2': 1e-6, 's3': 1e-4, 's4': 1e-3, 's5': 1e-2, 's6': .05, 's7': .1, 's8': .2, 's9': .5, 's10': 1}
+        # p_max = {'s1': 5e-8, 's2': 1e-6, 's3': 1e-4, 's4': 1e-3, 's5': 1e-2, 's6': .05, 's7': .1, 's8': .2, 's9': .5, 's10': 1}
+        p_max = {'s1': 5e-8, 's2': 1e-6, 's3': 1e-4, 's4': 1e-3, 's5': 1e-2}
 
         pheno_clump = specific_clumps(args.dirname + args.basename + pheno + '.clumped')
 
@@ -202,12 +169,11 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--overwrite', action='store_true')
     parser.add_argument('--generate_prs_loci_table', action='store_true')
-    parser.add_argument('--generate_contig_row_dict', action='store_true')
     parser.add_argument('--pheno_table', action='store_true')
     parser.add_argument('--ss_tables', action='store_true')
     parser.add_argument('--write_bgen', action='store_true')
-    parser.add_argument('--dirname', default='gs://armartin/disparities/bbj/') # gs://armartin/disparities/ukbb/
-    parser.add_argument('--basename', default='BBJ_holdout_gwas_')  # pheno_31063_holdout_gwas_
+    parser.add_argument('--dirname', default='gs://mkanai/disparities/ukbb/') # gs://armartin/disparities/ukbb/
+    parser.add_argument('--basename', default='pheno_31063_holdout_gwas_')  # pheno_31063_holdout_gwas_
 
     args = parser.parse_args()
     main(args)
