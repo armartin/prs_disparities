@@ -21,9 +21,11 @@ brewer_vec <- brewer.pal(3, 'Set1')
 names(brewer_vec) <- c('EUR', 'EAS', 'AFR')
 
 p1 <- ggplot(all_pops, aes(x=MAF, fill=pop, color=pop)) +
-  geom_density(alpha=0.7) +
+  geom_density(alpha=0.3) +
+  #geom_histogram(alpha=0.3) +
   scale_fill_manual(values=brewer_vec, name='Population') +
   scale_color_manual(values=brewer_vec, name='Population') +
+  scale_alpha_manual(values=0,guide=F) +
   labs(x='Minor allele frequency', y='Density', title='GWAS catalog sites') +
   guides(color=F, fill=guide_legend(override.aes = list(alpha=1))) +
   theme_classic() +

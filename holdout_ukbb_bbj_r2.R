@@ -6,7 +6,7 @@ library(doParallel)
 cl = makeCluster(8, 'PSOCK')
 registerDoParallel(cl)
 
-afr=FALSE
+afr=TRUE
 
 if(afr) {
   setwd('/Users/alicia/daly_lab/manuscripts/knowles_ashley_response/analysis/ukbb_afr/')
@@ -45,12 +45,12 @@ compute_r2 <- function(dataset, phenotype, p) {
 # Read in and wrangle PRS + phenotype + covariate data
 read_phenos <- function(pheno_name, afr) {
   if(afr) {
-    my_pheno <- read.table(paste0('bbj/UKB_', pheno_name, '_afr_PRS.txt.bgz'), header=T)  
+    my_pheno <- read.table(paste0('ukbb/UKB_', pheno_name, '_afr_PRS.txt.bgz'), header=T)  
     afr_subset <- read.table('../ukb31063_afr_subset_samples.tsv', header=T)
     afr_subset <- subset(afr_subset, afr_select)
     my_pheno <- subset(my_pheno, s %in% afr_subset$s)
   } else {
-    my_pheno <- read.table(paste0('bbj/UKB_', pheno_name, '_PRS.txt.bgz'), header=T)
+    my_pheno <- read.table(paste0('ukbb/UKB_', pheno_name, '_PRS.txt.bgz'), header=T)
   }
   my_pheno <- my_pheno %>%
     select(s:PC20,pheno_name,s1:s5)
@@ -75,6 +75,6 @@ date(); r2_combined <- ldply(phenos, function(x) { ldply(p_thresholds, function(
                              .parallel=T, .paropts=list(.export = c("compute_r2", "bootstrap_CIs", "p_thresholds", "all_phenos", "covariates"),
                                                         .packages = c('dplyr', 'plyr'))); date()
 
-write.table(r2_combined, 'ukbb_from_bbj.r2.txt', quote = F, row.names = F, sep = '\t')
+write.table(r2_combined, 'afr_from_ukbb.r2.txt', quote = F, row.names = F, sep = '\t')
 
 stopCluster(cl)

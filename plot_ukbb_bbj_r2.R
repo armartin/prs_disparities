@@ -1,10 +1,8 @@
-library(ggplot2)
+library(tidyverse)
 library(RColorBrewer)
 library(cowplot)
-library(plyr)
-library(tidyr)
-library(dplyr)
 
+setwd('/Users/alicia/daly_lab/manuscripts/knowles_ashley_response/analysis')
 ####################################################
 ### Read in data to make plots
 
@@ -55,7 +53,7 @@ plot_all_r2 <- function(dataset, data_name) {
            #expression(R^2~'(in ', data_name, ')')) +
     theme_classic() +
     theme(strip.background = element_rect(fill = "lightgrey"),
-          axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1, size=8),
+          axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),#, size=8),
           axis.text = element_text(color='black'),
           text = element_text(size=14))
 }
@@ -140,9 +138,30 @@ p1 <- plot_top_r2(bbj_filt, 'BBJ', T)
 p_bbj_top <- plot_top_r2(bbj_filt, 'BBJ')
 p_ukbb_top <- plot_top_r2(ukbb_filt, 'UKBB')
 p_afr_top <- plot_top_r2(afr_filt, 'UKBB African descent')
+load('p_rel.RData')
 
 legend <- get_legend(p1)
 
-p_bbj_ukbb_top <- plot_grid(p_bbj_top, p_ukbb_top, p_afr_top, legend, labels=c('A', 'B', 'C', ''))#, hjust=c(-0.5,-0.5,-0.5,1))
+p_bbj_ukbb_top <- plot_grid(p_ukbb_top, p_bbj_top, p_afr_top, legend, labels=c('A', 'B', 'C', ''))#, hjust=c(-0.5,-0.5,-0.5,1))
 save_plot('bbj_ukbb_r2_top.pdf', p_bbj_ukbb_top, base_height=10, base_width=10)
 
+
+# Plot h2 -----------------------------------------------------------------
+
+h2 <- read.table('baselineLD.txt', header=T, sep='\t') %>%
+  mutate(se_low = h2 - SE, se_high = h2 + SE)
+trait_order <- (h2 %>% filter(population=='UKBB'&model=='S-LDSC (baseline-LD)') %>% arrange(desc(h2)))$Trait
+h2$Trait <- factor(h2$Trait, levels=trait_order)
+pd <- position_dodge(0.2) # move them .05 to the left and right
+
+p_h2 <- ggplot(h2, aes(x=Trait, y=h2, color=population)) +
+  geom_point(position=pd) +
+  facet_wrap(~model) +
+  geom_errorbar(aes(ymin=se_low, ymax=se_high), width=.1, position=pd) +
+  scale_color_manual(values=color_vec, name='Population') +
+  scale_shape(name='LDSC model') +
+  labs(y=expression(h^2)) +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1),
+        text = element_text(size=16, color='black'))
+
+save_plot('h2_bbj_ukbb.pdf', p_h2, base_height=5,base_width=10)

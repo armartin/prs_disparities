@@ -1,7 +1,6 @@
-library(ggplot2)
-library(tidyr)
-library(dplyr)
+library(tidyverse)
 library(cowplot)
+library(RColorBrewer)
 
 setwd('/Users/alicia/daly_lab/manuscripts/knowles_ashley_response/analysis')
 
@@ -64,11 +63,21 @@ p2 <- ggplot(rel_prs, aes(y=trait_ref_cohort, x=Relative.to.European, color=Targ
   theme_bw() +
   labs(x='Proportion variance explained\nrelative to Europeans', y='Study cohort') +
   guides(shape=F, size=F, color=F) +
-  theme(text = element_text(size=14),
+  theme(text = element_text(size=16),
         axis.text = element_text(color='black'),
         panel.grid.major.y = element_blank(),
         panel.grid.minor.y = element_blank(),
         panel.grid.minor.x = element_blank())
 
+save_plot(filename='multiethnic_prs_rel.pdf', p2, base_width=6, base_height=5)
 p3 <- plot_grid(p1, p2, labels=c('A', 'B'))
 save_plot(filename='multiethnic_prs_empirical2.pdf', p3, base_width=12, base_height=5)
+
+labs = as.character(rel_prs$Phenotype[order(rel_prs$trait_ref_cohort)])
+labs[1] = 'Mean (AFR)'
+labs[10] = 'Mean (EAS)'
+p4 <- p2 +
+  theme(text = element_text(size=18)) +
+  scale_y_discrete(labels=labs)
+
+save_plot(filename='rel_prs.pdf', p4, base_width=5, base_height=4)

@@ -158,6 +158,7 @@ p_agg <- ggdraw() +
   draw_plot(p_gwas_global2, 0, 0, 1, 0.24)
 
 save_plot('gwas_time_global3.pdf', p_agg, base_width=7, base_height=5)
+#save_plot('gwas_time_global3_wide.pdf', p_agg, base_width=10, base_height=5)
 ggsave('gwas_time_global2.pdf', p_gwas_global, width=10)
 
 # Old version with pie charts ---------------------------------------------
