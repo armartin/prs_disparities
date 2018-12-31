@@ -14,19 +14,16 @@ read_r2 <- function(filename, target, sumstats, cc=FALSE) {
     target_sumstats <- target_sumstats[,c(4:ncol(target_sumstats))]
   }
   colnames(target_sumstats) <- c('r2', 'CI95_low', 'CI95_high', 'p', 'pheno', 'p_threshold')
-  if (cc) {
-    target_sumstats$pheno <- revalue(target_sumstats$pheno, c("crc" = "CRC", "glaucoma" = "Glaucoma", "afib" = "AFib", "t2d" = "T2D", "ra" = "RA"))
-  } else {
-    target_sumstats$pheno <- revalue(target_sumstats$pheno, c("basophil"="Basophil", "bmi"="BMI", 'dbp'='DBP', 'eosinophil'='Eosinophil',
-                                                              'hb'='HB', 'height'='Height', 'ht'='HT', 'lymphocyte'='Lymphocyte',
-                                                              'mch'='MCH', 'mchc'='MCHC','mcv'='MCV', 'monocyte'='Monocyte',
-                                                              'neutrophil'='Neutrophil', 'plt'='Platelet', 'rbc'='RBC', 'sbp'='SBP', 'wbc'='WBC'))
-  }
+  target_sumstats$pheno <- recode(target_sumstats$pheno, basophil="Basophil", bmi="BMI", dbp='DBP', eosinophil='Eosinophil',
+                                                         hb='HB', height='Height', ht='HT', lymphocyte='Lymphocyte',
+                                                         mch='MCH', mchc='MCHC', mcv='MCV', monocyte='Monocyte',
+                                                         neutrophil='Neutrophil', plt='Platelet', rbc='RBC', sbp='SBP', wbc='WBC',
+                                                         crc = "CRC", glaucoma = "Glaucoma", afib = "AFib", t2d = "T2D", ra = "RA")
 
   target_sumstats$p_threshold <- factor(target_sumstats$p_threshold, levels = paste0('s', 1:10))
-  target_sumstats$p_threshold <- revalue(target_sumstats$p_threshold, c('s1'='5e-8', 's2'='1e-6', 's3'='1e-4', 's4'='1e-3',
-                                                                        's5'='1e-2', 's6'='.05', 's7'='.1', 's8'='.2',
-                                                                        's9'='.5', 's10'='1'))
+  target_sumstats$p_threshold <- recode(target_sumstats$p_threshold, s1='5e-8', s2='1e-6', s3='1e-4', s4='1e-3',
+                                                                     s5='1e-2', s6='.05', s7='.1', s8='.2',
+                                                                     s9='.5', s10='1')
   target_sumstats$target <- target
   target_sumstats$sumstats <- sumstats
   return(target_sumstats)
@@ -173,9 +170,9 @@ ggsave('bbj_ukbb_r2_test.pdf', p_bbj_ukbb_test, width=12, height=6)
 plot_top_r2 <- function(dataset, data_name, legend=FALSE, cc=FALSE) {
   pd <- position_dodge(0.2) # move them .05 to the left and right
   if (cc) {
-    ylab = bquote(R[Liability]^2 ~'(in'~ .(data_name) * ')')
+    ylab <- bquote(R[Liability]^2 ~'(in'~ .(data_name) * ')')
   } else {
-    ylab = bquote(R^2 ~'(in'~ .(data_name) * ')')
+    ylab <- bquote(R^2 ~'(in'~ .(data_name) * ')')
   }
   p <- ggplot(dataset, aes(x=pheno, y=r2, color=sumstats)) +
     geom_point(position=pd) +
@@ -194,11 +191,13 @@ p1 <- plot_top_r2(bbj_filt, 'BBJ', legend=TRUE)
 p_bbj_top <- plot_top_r2(bbj_filt, 'BBJ')
 p_ukbb_top <- plot_top_r2(ukbb_filt, 'UKBB')
 p_afr_top <- plot_top_r2(afr_filt, 'UKBB African descent')
+p_bbj_cc_top <- plot_top_r2(bbj_filt_cc, 'BBJ', cc=TRUE)
+p_ukbb_cc_top <- plot_top_r2(ukbb_filt_cc, 'UKBB', cc=TRUE)
 
 legend <- get_legend(p1)
 
-p_bbj_ukbb_top <- plot_grid(p_ukbb_top, p_bbj_top, p_afr_top, legend, labels=c('A', 'B', 'C', ''))#, hjust=c(-0.5,-0.5,-0.5,1))
-save_plot('bbj_ukbb_r2_top.pdf', p_bbj_ukbb_top, base_height=10, base_width=10)
+p_bbj_ukbb_top <- plot_grid(p_bbj_top, p_ukbb_top, p_afr_top, p_bbj_cc_top, p_ukbb_cc_top, legend, labels=c('A', 'B', 'C', 'D', 'E', ''))#, hjust=c(-0.5,-0.5,-0.5,1))
+save_plot('bbj_ukbb_r2_top.pdf', p_bbj_ukbb_top, base_height=10, base_width=15)
 
 
 # Plot h2 -----------------------------------------------------------------
@@ -221,10 +220,36 @@ p_h2 <- ggplot(h2, aes(x=Trait, y=h2, color=population)) +
 
 save_plot('h2_bbj_ukbb.pdf', p_h2, base_height=5,base_width=10)
 
-p_bbj_cc_top <- plot_top_r2(bbj_filt_cc, 'BBJ', cc=TRUE)
-p_ukbb_cc_top <- plot_top_r2(ukbb_filt_cc, 'UKBB', cc=TRUE)
+# diseases
+h2_cc <- read.table('baselineLD_cc.txt', header=T, sep='\t') %>%
+  mutate(se_low = h2 - SE, se_high = h2 + SE)
+h2_cc_obs <- h2_cc %>% filter(scale=='observed')
+h2_cc_lia <- h2_cc %>% filter(scale=='liability')
 
-legend <- get_legend(p1)
+trait_order_cc_obs <- (h2_cc_obs %>% filter(population=='UKBB'&model=='S-LDSC (baseline-LD)') %>% arrange(desc(h2)))$Trait
+h2_cc_obs$Trait <- factor(h2_cc_obs$Trait, levels=trait_order_cc_obs)
+trait_order_cc_lia <- (h2_cc_lia %>% filter(population=='UKBB'&model=='S-LDSC (baseline-LD)') %>% arrange(desc(h2)))$Trait
+h2_cc_lia$Trait <- factor(h2_cc_lia$Trait, levels=trait_order_cc_lia)
 
-p_bbj_ukbb_top <- plot_grid(p_bbj_top, p_ukbb_top, p_afr_top, p_bbj_cc_top, p_ukbb_cc_top, legend, labels=c('A', 'B', 'C', 'D', 'E', ''))#, hjust=c(-0.5,-0.5,-0.5,1))
-save_plot('bbj_ukbb_r2_top.pdf', p_bbj_ukbb_top, base_height=10, base_width=15)
+
+p_h2_cc_obs <- ggplot(h2_cc_obs, aes(x=Trait, y=h2, color=population)) +
+  geom_point(position=pd) +
+  facet_wrap(~model) +
+  geom_errorbar(aes(ymin=se_low, ymax=se_high), width=.1, position=pd) +
+  scale_color_manual(values=color_vec, name='Population') +
+  scale_shape(name='LDSC model') +
+  labs(y=expression(h^2)) +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1),
+        text = element_text(size=16, color='black'))
+p_h2_cc_lia <- ggplot(h2_cc_lia, aes(x=Trait, y=h2, color=population)) +
+  geom_point(position=pd) +
+  facet_wrap(~model) +
+  geom_errorbar(aes(ymin=se_low, ymax=se_high), width=.1, position=pd) +
+  scale_color_manual(values=color_vec, name='Population') +
+  scale_shape(name='LDSC model') +
+  labs(y=expression(h^2)) +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1),
+        text = element_text(size=16, color='black'))
+
+save_plot('h2_cc_obs_bbj_ukbb.pdf', p_h2_cc_obs, base_height=5,base_width=10)
+save_plot('h2_cc_lia_bbj_ukbb.pdf', p_h2_cc_lia, base_height=5,base_width=10)
