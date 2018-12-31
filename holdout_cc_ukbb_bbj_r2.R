@@ -9,6 +9,8 @@ registerDoParallel(cl)
 
 covariates = c("isFemale", "age", "age_squared", "age_isFemale", "age_squared_isFemale", paste0("PC", seq(20)))
 
+prevalence = list(crc = 0.02, t2d = 0.05, glaucoma = 0.02, afib = 0.02, ra = 0.01)
+
 # reference: https://github.com/armartin/pgc_scz_asia/blob/master/eur_eas_prs.R
 h2l_R2N <- function(k, r2n, p) {
   # k = population prevalence
@@ -27,13 +29,13 @@ h2l_R2N <- function(k, r2n, p) {
 }
 
 # Bootstrap 95% CI around r^2
-bootstrap_CIs <- function(my_subset) {
+bootstrap_CIs <- function(my_subset, phenotype) {
   sample_subset <- sample_n(my_subset, nrow(my_subset), replace=TRUE)
-  model1 <- lm(as.formula(sprintf("true_pheno ~ PRS + %s", paste(covariates, collapse = " + "))), data=sample_subset)
-  model0 <- lm(as.formula(sprintf("true_pheno ~ %s", paste(covariates, collapse = " + "))), data=sample_subset)
+  model1 <- glm(as.formula(sprintf("true_pheno ~ PRS + %s", paste(covariates, collapse = " + "))), data=sample_subset, family = 'binomial')
+  model0 <- glm(as.formula(sprintf("true_pheno ~ %s", paste(covariates, collapse = " + "))), data=sample_subset, family = 'binomial')
   my_r2 <- nagelkerke(model1, null=model0)
   r2n <- my_r2$Pseudo.R.squared.for.model.vs.null[3]
-  r2l <- h2l_R2N(k=0.01, r2n=r2n, p=sum(my_subset$PHENO==1)/sum(my_subset$PHENO %in% c(0,1)))
+  r2l <- h2l_R2N(k=prevalence[[phenotype]], r2n=r2n, p=sum(my_subset$true_pheno==1)/sum(my_subset$true_pheno %in% c(0,1)))
   return(data.frame(r2n = r2n, r2l = r2l))
 }
 
@@ -41,17 +43,13 @@ bootstrap_CIs <- function(my_subset) {
 compute_r2 <- function(dataset, phenotype, p) {
   print(paste(phenotype, p))
   my_subset <- subset(dataset, p_threshold==p & pheno_name==phenotype)
-  model1 <- lm(as.formula(sprintf("true_pheno ~ PRS + %s", paste(covariates, collapse = " + "))), data=my_subset)
-  model0 <- lm(as.formula(sprintf("true_pheno ~ %s", paste(covariates, collapse = " + "))), data=my_subset)
+  model1 <- glm(as.formula(sprintf("true_pheno ~ PRS + %s", paste(covariates, collapse = " + "))), data=my_subset, family = 'binomial')
+  model0 <- glm(as.formula(sprintf("true_pheno ~ %s", paste(covariates, collapse = " + "))), data=my_subset, family = 'binomial')
   my_r2 <- nagelkerke(model1, null=model0)
   r2n <- my_r2$Pseudo.R.squared.for.model.vs.null[3]
-  r2l <- h2l_R2N(k=0.01, r2n=r2n, p=sum(my_subset$PHENO==1)/sum(my_subset$PHENO %in% c(0,1)))
+  r2l <- h2l_R2N(k=prevalence[[phenotype]], r2n=r2n, p=sum(my_subset$true_pheno==1)/sum(my_subset$true_pheno %in% c(0,1)))
   pval <- my_r2$Likelihood.ratio.test[4]
-  date();
-  bs_means <- ldply(1:1000, fuction(i){bootstrap_CIs(my_subset)},
-                    .parallel=T, .paropts=list(.export = c("h2l_R2N", "covariates"),
-                                                        .packages = c('dplyr', 'plyr', 'rcompanion')))
-  date()
+  bs_means <- ldply(1:1000, function(i){bootstrap_CIs(my_subset, phenotype)})
   delta_r2n <- bs_means$r2n - r2n
   d_r2n = quantile(delta_r2n, c(0.025, 0.975))
   ci_r2n = r2n - c(d_r2n[1], d_r2n[2])
@@ -63,25 +61,10 @@ compute_r2 <- function(dataset, phenotype, p) {
   return(r2_vec)
 }
 
-compute_r2 <- function(my_subset, coh, study) {
-  #print(paste(coh, study, n_snps, sep=', '))
-  model1 <- glm(PHENO~SCORE+C1+C2+C3+C4+C5+C6+C7+C8+C9+C10, data=my_subset, family='binomial')
-  model0 <- glm(PHENO~C1+C2+C3+C4+C5+C6+C7+C8+C9+C10, data=my_subset, family='binomial')
-  my_r2 <- nagelkerke(model1, null=model0)
-  r2n <- my_r2$Pseudo.R.squared.for.model.vs.null[3]
-  r2l <- h2l_R2N(k=0.01, r2n=r2n, p=sum(my_subset$PHENO==1)/sum(my_subset$PHENO %in% c(0,1)))
-  df <- data.frame(cohort=coh,
-                   study_pop=study,
-                   r2_nagelkerke=r2n,
-                   r2_liability=r2l,
-                   p=my_r2$Likelihood.ratio.test[4])
-  return(df)
-}
-
 
 # Read in and wrangle PRS + phenotype + covariate data
 read_phenos <- function(pheno_name) {
-  my_pheno <- read.table(paste0('ukbb/UKB_', pheno_name, '_PRS.txt.bgz'), header=T)
+  my_pheno <- read.table(paste0('bbj/UKB_', pheno_name, '_PRS.txt.bgz'), header=T)
   my_pheno <- my_pheno %>%
     select(s:PC20,pheno_name,s1:s5)
   colnames(my_pheno)[27] <- 'true_pheno'
@@ -95,13 +78,17 @@ read_phenos <- function(pheno_name) {
 phenos <- c('crc', 't2d', 'glaucoma', 'afib', 'ra')
 
 
-date(); all_phenos <- ldply(phenos, function(x) { ldply(afr, function(y) {read_phenos(x, y) } ) }); date()
+date(); all_phenos <- ldply(phenos, function(x) { read_phenos(x) }); date()
 
 p_thresholds <- paste0('s', 1:5)
 
 # run this for all phenos, takes ~20 minutes for all phenotypes
-date(); r2_combined <- ldply(phenos, function(x) { ldply(p_thresholds, function(y) { compute_r2(all_phenos, x, y) } ) }); date()
+date(); r2_combined <- ldply(phenos, function(x) { ldply(p_thresholds, function(y) { compute_r2(all_phenos, x, y) } ) },
+                             .parallel=T,
+                             .paropts=list(.export = c("h2l_R2N", "all_phenos", "p_thresholds", "covariates", "prevalence", "compute_r2", "bootstrap_CIs"),
+                             .packages = c('dplyr', 'plyr', 'rcompanion'))); date()
 
-write.table(r2_combined, 'ukbb_from_ukbb_cc.r2.txt', quote = F, row.names = F, sep = '\t')
+write.table(r2_combined, 'ukbb_from_bbj_cc.r2.txt', quote = F, row.names = F, sep = '\t')
 
 stopCluster(cl)
+
