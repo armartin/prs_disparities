@@ -1,3 +1,4 @@
+library(plyr)
 library(tidyverse)
 library(RColorBrewer)
 library(cowplot)
@@ -86,12 +87,12 @@ p_afr <- plot_all_r2(afr, 'UKBB African descent')
 p_bbj_cc <- plot_all_r2(bbj_cc, 'BBJ', cc=TRUE)
 p_ukbb_cc <- plot_all_r2(ukbb_cc, 'UKBB European descent', cc=TRUE)
 
-save_plot('bbj_r2_all_p.pdf', p_bbj, base_width=8, base_height=5)
-save_plot('ukbb_r2_all_p.pdf', p_ukbb, base_width=8, base_height=5)
-save_plot('afr_r2_all_p.pdf', p_afr, base_width=8, base_height=5)
+save_plot('bbj_r2_all_p.pdf', p_bbj, base_width=9, base_height=4.5)
+save_plot('ukbb_r2_all_p.pdf', p_ukbb, base_width=9, base_height=4.5)
+save_plot('afr_r2_all_p.pdf', p_afr, base_width=9, base_height=4.5)
 
-save_plot('bbj_cc_r2_all_p.pdf', p_bbj_cc, base_width=8, base_height=5)
-save_plot('ukbb_cc_r2_all_p.pdf', p_ukbb_cc, base_width=8, base_height=5)
+save_plot('bbj_cc_r2_all_p.pdf', p_bbj_cc, base_width=9, base_height=4.5)
+save_plot('ukbb_cc_r2_all_p.pdf', p_ukbb_cc, base_width=9, base_height=4.5)
 
 p_bbj_ukbb <- plot_grid(p_bbj, p_ukbb, p_afr, labels=c('A', 'B', 'C'), ncol=2)
 save_plot('bbj_ukbb_r2_all_p.pdf', p_bbj_ukbb, nrow=2, base_height=4, base_width=15)
@@ -171,34 +172,48 @@ p_bbj_ukbb_test <- plot_grid(p1, p2, labels=c('A', 'B'))#, hjust=c(-0.5,-0.5,-0.
 ggsave('bbj_ukbb_r2_test.pdf', p_bbj_ukbb_test, width=12, height=6)
 
 plot_top_r2 <- function(dataset, data_name, legend=FALSE, cc=FALSE) {
-  pd <- position_dodge(0.2) # move them .05 to the left and right
   if (cc) {
-    ylab = bquote(R[Liability]^2 ~'(in'~ .(data_name) * ')')
+    ylab = bquote(R[Liability]^2 ~'('* .(data_name) * ')')
+    pd <- position_dodge(0.2) # move them .05 to the left and right
+    ax_size=10
   } else {
-    ylab = bquote(R^2 ~'(in'~ .(data_name) * ')')
+    ylab = bquote(R^2 ~'('* .(data_name) * ')')
+    pd <- position_dodge(0.5) # move them .05 to the left and right
+    ax_size=8
   }
   p <- ggplot(dataset, aes(x=pheno, y=r2, color=sumstats)) +
     geom_point(position=pd) +
-    geom_errorbar(aes(ymin=CI95_low, ymax=CI95_high), width=.1, position=pd) +
-    scale_color_manual(values=color_vec, name='GWAS\ncohort\n(sumstats)') +
+    geom_errorbar(aes(ymin=CI95_low, ymax=CI95_high), width=0, position=pd) +
+    scale_color_manual(values=color_vec, name='Summary statistics') +
     labs(x='Phenotype', y=ylab) +
-    theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1),
-          text = element_text(size=16, color='black'))
+    theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1, size=ax_size),
+          text = element_text(size=12, color='black'),
+          axis.text.y = element_text(size=10))
   if(!legend) {
     p <- p + guides(color=F)
+  } else {
+    p <- p +
+      theme(legend.position=c(0,1), legend.justification=c(0,1))
   }
   return(p)
 }
 
 p1 <- plot_top_r2(bbj_filt, 'BBJ', legend=TRUE)
+p_bbj_cc_top <- plot_top_r2(bbj_filt_cc, 'BBJ', cc=TRUE, legend=TRUE)
+p_ukbb_cc_top <- plot_top_r2(ukbb_filt_cc, 'UKBB European', cc=TRUE)
+
 p_bbj_top <- plot_top_r2(bbj_filt, 'BBJ')
-p_ukbb_top <- plot_top_r2(ukbb_filt, 'UKBB')
-p_afr_top <- plot_top_r2(afr_filt, 'UKBB African descent')
+p_ukbb_top <- plot_top_r2(ukbb_filt, 'UKBB European')
+p_afr_top <- plot_top_r2(afr_filt, 'UKBB African')
 
 legend <- get_legend(p1)
+p_blank <- ggplot()+geom_blank(aes(1,1)) + 
+  cowplot::theme_nothing()
 
-p_bbj_ukbb_top <- plot_grid(p_ukbb_top, p_bbj_top, p_afr_top, legend, labels=c('A', 'B', 'C', ''))#, hjust=c(-0.5,-0.5,-0.5,1))
-save_plot('bbj_ukbb_r2_top.pdf', p_bbj_ukbb_top, base_height=10, base_width=10)
+p_bbj_ukbb_top <- plot_grid(p_blank, p_bbj_cc_top, p_ukbb_cc_top, p_ukbb_top, p_bbj_top, p_afr_top, labels=c('a', 'b', 'c', 'd', 'e', 'f'))#, hjust=c(-0.5,-0.5,-0.5,1))
+
+#p_bbj_ukbb_top <- plot_grid(p_ukbb_top, p_bbj_top, p_afr_top, legend, labels=c('A', 'B', 'C', ''))#, hjust=c(-0.5,-0.5,-0.5,1))
+save_plot('bbj_ukbb_r2_top.pdf', p_bbj_ukbb_top, base_height=6, base_width=10)
 
 
 # Plot h2 -----------------------------------------------------------------

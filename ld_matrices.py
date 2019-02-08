@@ -24,11 +24,11 @@ def main(args):
     cmap = ListedColormap(sns.color_palette('Blues', 256))
 
     # Draw the heatmap with the mask and correct aspect ratio
-    sns.set(font_scale=2)
+    sns.set(font_scale=2.5)
     sns.heatmap(ld2, cmap=cmap)
     ax.set(title=args.ld1_pop, ylabel=args.ld2_pop)
     for item in ([ax.title, ax.yaxis.label]):
-        item.set_fontsize(20)
+        item.set_fontsize(24)
     plt.tick_params(axis='x', bottom=False, labelbottom=False)
     plt.tick_params(axis='y', left=False, labelleft=False)
     fig = plt.gcf()

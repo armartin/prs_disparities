@@ -17,11 +17,11 @@ afr <- read_pops('AFR_gwas_catalog_v1.0.2-associations_e93_r2018-08-14.frq', 'AF
 all_pops <- rbind(eur, eas, afr)
 all_pops$pop <- factor(all_pops$pop, levels=c('EAS', 'AFR', 'EUR'))
 
-brewer_vec <- brewer.pal(3, 'Set1')
-names(brewer_vec) <- c('EUR', 'EAS', 'AFR')
+brewer_vec <- brewer.pal(4, 'Set1')
+names(brewer_vec) <- c('EUR', 'EAS', 'SAS', 'AFR')
 
 p1 <- ggplot(all_pops, aes(x=MAF, fill=pop, color=pop)) +
-  geom_density(alpha=0.3) +
+  geom_density(alpha=0.5) +
   #geom_histogram(alpha=0.3) +
   scale_fill_manual(values=brewer_vec, name='Population') +
   scale_color_manual(values=brewer_vec, name='Population') +
@@ -32,7 +32,7 @@ p1 <- ggplot(all_pops, aes(x=MAF, fill=pop, color=pop)) +
   theme(text = element_text(size=16),
         legend.position = c(1,1),
         legend.justification = c(1,1),
-        axis.text = element_text(color='black'),
+        axis.text = element_text(color='black', size=16),
         plot.title = element_text(hjust = 0.5))
 
-ggsave(filename='gwas_sfs.pdf', p1, width=5, height=4)
+ggsave(filename='gwas_sfs.pdf', p1, width=4.8, height=3.2)

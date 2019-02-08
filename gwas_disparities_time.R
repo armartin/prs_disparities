@@ -54,7 +54,7 @@ gwas_pop_date_agg <- anc_merge %>%
   arrange(DATE) %>%
   subset(!is.na(NUMBER.OF.INDIVDUALS)) %>%
   group_by(category2) %>%
-  mutate(date_total = cumsum(NUMBER.OF.INDIVDUALS)) %>%
+  mutate(date_total = cumsum(NUMBER.OF.INDIVDUALS), date_mean = cummean(NUMBER.OF.INDIVDUALS)) %>%
   group_by(DATE, category2) %>%
   slice(which.max(date_total))
 
@@ -66,7 +66,8 @@ names(color_vec) <- (c('ASN', 'EUR', 'Non-EURASN', 'Multiple', 'NR', 'East Asian
 
 color_vec <- c(brewer.pal(8, 'Set1'), brewer.pal(3, 'Greys')[2:3])
 labels <- levels(anc_merge$category2)
-names(color_vec) <- c(labels[1:2], labels[4:3], labels[5:length(labels)])
+#names(color_vec) <- c(labels[1:2], labels[4:3], labels[5:length(labels)])
+names(color_vec) <- labels
 
 #anc_merge <- anc_merge %>% arrange(DATE)
 my_vals <- gwas_pop_date_agg %>% arrange(DATE) %>% expand(DATE, category2) %>% distinct()
@@ -75,7 +76,8 @@ my_vals2$date_total[2:10] <- 0
 my_vals2 <- my_vals2 %>%
   subset(category2!='Not Reported') %>%
   group_by(category2) %>%
-  mutate(fill_gap = na.locf(date_total, fromLast=F, na.rm=F)) 
+  mutate(fill_gap = na.locf(date_total, fromLast=F, na.rm=F), 
+         fill_mean = na.locf(date_mean, fromLast=F, na.rm=F)) 
 # na.locf is filling from the wrong direction. later dates first
 my_vals3 <- my_vals2 %>%
   subset(category2 != 'Not Reported') %>%
@@ -91,7 +93,8 @@ p2 <- ggplot(my_vals2, aes(x=DATE, y=fill_gap/1e6, fill=category2, color=categor
   labs(x='', y='Individuals in GWAS (millions)') +
   #labs(x='Date', y='Fraction of individuals in GWAS') +
   theme_classic() +
-  theme(axis.text.x = element_text(angle=90),
+  theme(axis.text = element_text(color='black'),
+        axis.text.x = element_text(angle=90, vjust=0.5, hjust=2),
         text = element_text(size=16),
         legend.position = c(0.02, 1),
         legend.justification = c(0, 1),
@@ -107,7 +110,8 @@ p3 <- ggplot(my_vals3, aes(x=DATE, y=pop_frac, fill=category2, color=category2))
   labs(x='', y='Fraction') +
   theme_classic() +
   guides(fill=F, color=F) +
-  theme(axis.text.x = element_blank(),#element_text(angle=45, hjust=1),
+  theme(axis.text = element_text(color='black'),
+        axis.text.x = element_blank(),#element_text(angle=45, hjust=1),
         text = element_text(size=16),
         panel.background = element_rect(fill = "transparent", colour = NA),
         plot.background = element_rect(fill = "transparent", colour = NA))
@@ -136,13 +140,15 @@ p_global <- ggplot(populationAncestries, aes(x='Present', y=world/1000, fill=pop
   labs(y='Global population (billions)', x='') +
   guides(fill=F) +
   scale_y_continuous(position='right') +
-  theme(axis.text.x = element_text(angle=90),#axis.text.x=element_blank(),
+  theme(axis.text = element_text(color='black'),
+        axis.text.x = element_text(angle=90, vjust=0.5),#axis.text.x=element_blank(),
         text = element_text(size=16))
 
 p_global2 <- p_global +
   scale_x_discrete(position='top') +
   labs(y='', x='') +
-  theme(axis.text.x = element_blank(),
+  theme(axis.text = element_text(color='black'),
+        axis.text.x = element_blank(),
         axis.text.y= element_text(color='white'),
         axis.ticks.y= element_blank(),
         plot.background = element_rect(fill = "transparent", colour = NA))
@@ -160,6 +166,30 @@ p_agg <- ggdraw() +
 save_plot('gwas_time_global3.pdf', p_agg, base_width=7, base_height=5)
 #save_plot('gwas_time_global3_wide.pdf', p_agg, base_width=10, base_height=5)
 ggsave('gwas_time_global2.pdf', p_gwas_global, width=10)
+
+
+# Sample size by time -----------------------------------------------------
+
+my_vals_filt <- my_vals2 %>%
+  filter(category2!='Multiple')
+p_mean <- ggplot(my_vals_filt, aes(x=DATE, y=fill_mean, fill=category2, color=category2)) +
+  #p2 <- ggplot(my_vals3, aes(x=DATE, y=pop_frac, fill=category2, color=category2)) +
+  geom_line() +
+  scale_x_date(date_breaks = "2 years", date_labels = "%Y") +
+  scale_fill_manual(values=color_vec, name='Population') +
+  scale_color_manual(values=color_vec, name='Population') +
+  labs(x='Date', y='Average sample size per study') +
+  #labs(x='Date', y='Fraction of individuals in GWAS') +
+  theme_classic() +
+  theme(axis.text = element_text(color='black'),
+        axis.text.x = element_text(angle=90, vjust=0.5),
+        text = element_text(size=16),
+        legend.position = c(0.02, 1),
+        legend.justification = c(0, 1),
+        legend.text = element_text(size=14),
+        legend.background = element_rect(fill = "transparent", colour = NA))
+
+save_plot('gwas_time_mean.pdf', p_mean, base_width=7, base_height=5)
 
 # Old version with pie charts ---------------------------------------------
 
