@@ -25,12 +25,12 @@ def annotate_beta(mt, ss_loc):
                                  (mt.alleles[1] == ss_loc.alt)) |
                                 ((flip_text(mt.alleles[0]) == ss_loc.ref) &
                                  (flip_text(mt.alleles[1]) == ss_loc.alt)),
-                                (-1 * ss_loc.beta))
+                                ss_loc.beta)
                           .when(((mt.alleles[0] == ss_loc.alt) &
                                  (mt.alleles[1] == ss_loc.ref)) |
                                 ((flip_text(mt.alleles[0]) == ss_loc.alt) &
                                  (flip_text(mt.alleles[1]) == ss_loc.ref)),
-                                ss_loc.beta)
+                                (-1 * ss_loc.beta))
                           .or_missing()}
                           )
     return(mt)
